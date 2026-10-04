@@ -285,6 +285,20 @@
   .row-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
   .pkg{display:grid;grid-template-columns:1fr 150px auto auto;gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid var(--line)}
   @media (max-width:560px){.pkg{grid-template-columns:1fr 110px}.pkg .btn{width:100%}}
+  .mkrow{display:flex;align-items:center;border:1px solid var(--line2);border-radius:14px;background:rgba(0,0,0,.35);overflow:hidden;transition:border-color .2s,box-shadow .2s;min-width:0}
+  .mkrow:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px rgba(5,170,255,.18)}
+  .mkrow .pre{padding:0 0 0 14px;color:var(--muted);font-size:15px;white-space:nowrap}
+  .mkrow input{flex:1;min-width:60px;height:50px;border:0;background:transparent;color:var(--blue2);font:700 16px 'DM Sans',system-ui,sans-serif;padding:0 14px 0 2px;outline:none}
+  .mkrow .btn{margin:4px;flex:none}
+  .mk{display:flex;flex-direction:column;gap:8px;padding:14px;border:1px dashed rgba(5,170,255,.4);border-radius:16px;background:rgba(5,170,255,.05)}
+  .chk{display:flex;align-items:center;gap:10px;font-size:15px;cursor:pointer}
+  .chk input{width:20px;height:20px;accent-color:var(--blue)}
+  .pending{display:flex;align-items:center;gap:16px;padding:18px 20px;border-color:rgba(5,170,255,.5)}
+  .pending .sp2{width:30px;height:30px;flex:none;border-radius:50%;border:3px solid var(--s3);border-top-color:var(--blue);animation:rot .8s linear infinite}
+  .pending.ok .sp2{animation:none;border-color:var(--okc);background:var(--okc);display:grid;place-items:center}
+  .pending b{display:block;font:800 16px Montserrat,system-ui,sans-serif}
+  .pending span{color:var(--muted);font-size:14px}
+  .pending .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
   .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;font-size:14px;color:var(--muted)}
 
   .toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translate(-50%,40px) scale(.96);opacity:0;background:rgba(17,21,27,.9);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid var(--line2);border-radius:100px;color:#fff;padding:13px 20px;font-size:14px;transition:all .45s var(--spring);z-index:85;pointer-events:none;max-width:calc(100% - 32px);text-align:center;display:flex;gap:10px;align-items:center}
@@ -628,6 +642,29 @@ function viewAdminLogin(msg){
   };
 }
 
+function slugify(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/^(dr|dra)\.?\s+/,'').replace(/[^a-z0-9]+/g,'').slice(0,30); }
+
+// despues de crear un link, se revisa cada pocos segundos hasta que GitHub Pages lo publique
+function pendingHTML(){
+  const p = A.pending; if (!p) return '';
+  const short = p.url.replace('https://','').replace(/\/$/,'');
+  return p.ok
+    ? `<div class="glass pending ok"><span class="sp2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#001019" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <div><b>¡Listo! El link de ${esc(p.name)} ya está en línea</b><span>${esc(short)}</span></div>
+        <div class="acts"><button class="btn sm blue" type="button" data-copyurl="${esc(p.url)}">Copiar link</button><a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener">Abrir</a><button class="btn sm" type="button" data-closepend aria-label="Cerrar aviso">✕</button></div></div>`
+    : `<div class="glass pending"><span class="sp2"></span>
+        <div><b>Publicando el link de ${esc(p.name)}…</b><span>${esc(short)} · tarda más o menos 1 minuto, puedes seguir usando el admin</span></div></div>`;
+}
+function startPending(url, name){
+  A.pending = { url, name, ok:false, tries:0 };
+  const tick = async () => {
+    const p = A.pending; if (!p || p.url !== url || p.ok) return;
+    try { const r = await fetch(url + '?v=' + Date.now(), { cache:'no-store' }); if (r.ok){ p.ok = true; const slot = document.getElementById('pendSlot'); if (slot) slot.innerHTML = pendingHTML(); toast('Link en línea'); return; } } catch(_){}
+    if (++p.tries < 40) setTimeout(tick, 6000);
+  };
+  setTimeout(tick, 8000);
+}
+
 async function adminCall(payload, okMsg){
   try {
     const r = await api({ ...payload, token: A.token });
@@ -673,6 +710,7 @@ function viewAdmin(){
   </section>
 
   <main class="a-body">
+    <div id="pendSlot">${pendingHTML()}</div>
     <section class="glass sale rv${anim}">
       <h2>Registrar venta</h2>
       <p>Elige al creador y el programa que escogió la persona.</p>
@@ -712,6 +750,8 @@ function viewAdmin(){
             <div class="field"><label class="lbl">Link personal</label><input name="link" value="${esc(inf.link)}" placeholder="https://wavecreatorprogram.com/…"></div>
             <div class="row-acts" style="grid-column:1/-1"><button class="btn" type="button" data-preview="${esc(inf.id)}">Ver como creador</button><button class="btn blue" type="submit">Guardar datos</button></div>
           </form>
+          ${inf.link ? '' : `<div class="mk"><span class="lbl">Este creador todavía no tiene link con formulario</span>
+            <div class="mkrow"><span class="pre">wavecreatorprogram.com/</span><input class="mkslug" data-id="${esc(inf.id)}" value="${esc(slugify(inf.nombre))}" aria-label="Nombre del link de ${esc(inf.nombre)}" autocapitalize="none" autocorrect="off" spellcheck="false"><button class="btn blue sm" type="button" data-mklink="${esc(inf.id)}">Crear su link</button></div></div>`}
           <div><span class="lbl">Ventas</span>
             <div>${refs.length ? refs.map(r => `
               <form class="ref refForm" data-id="${esc(r.id)}" data-inf="${esc(inf.id)}">
@@ -731,13 +771,15 @@ function viewAdmin(){
       </details>`).join('')}
     </div>
 
-    <section class="glass panel" style="margin-top:6px"><h2>Agregar creador</h2><p class="hint">El código es lo que el creador escribe para entrar a su portal.</p>
-      <form class="grid g4" id="newInf">
-        <div class="field"><label class="lbl" for="nN">Nombre</label><input id="nN" required placeholder="Nombre completo"></div>
-        <div class="field"><label class="lbl" for="nC">Código de acceso</label><input id="nC" required placeholder="p. ej. MARIA10" autocapitalize="characters"></div>
-        <div class="field"><label class="lbl" for="nH">Handle</label><input id="nH" placeholder="@usuario"></div>
-        <div class="field"><label class="lbl" for="nL">Link personal</label><input id="nL" placeholder="https://wavecreatorprogram.com/…"></div>
-        <div class="row-acts" style="grid-column:1/-1"><button class="btn blue" type="submit">+ Agregar creador</button></div>
+    <section class="glass panel" style="margin-top:6px" id="newSec"><h2>Nuevo creador</h2><p class="hint">Se crea en el portal y también su link con el formulario. El link queda en línea en más o menos 1 minuto.</p>
+      <form class="grid g3" id="newInf">
+        <div class="field"><label class="lbl" for="nN">Nombre</label><input id="nN" required placeholder="Nombre completo" autocomplete="off"></div>
+        <div class="field"><label class="lbl" for="nC">Código para su portal</label><input id="nC" required placeholder="p. ej. MARIA" autocapitalize="characters" autocomplete="off"></div>
+        <div class="field"><label class="lbl" for="nH">Handle (opcional)</label><input id="nH" placeholder="@usuario" autocomplete="off"></div>
+        <div class="field" style="grid-column:1/-1"><label class="lbl" for="nS">Su link</label>
+          <div class="mkrow"><span class="pre">wavecreatorprogram.com/</span><input id="nS" placeholder="maria" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off"></div></div>
+        <label class="chk" style="grid-column:1/-1"><input type="checkbox" id="nMk" checked> Crear también su link (página con el formulario)</label>
+        <div class="row-acts" style="grid-column:1/-1"><button class="btn blue" type="submit" id="nBtn">+ Crear creador</button></div>
       </form>
     </section>
 
@@ -812,10 +854,21 @@ function bindAdmin(){
 
   root.addEventListener('click', adminClicks);
 
+  // el link se sugiere solo a partir del nombre, hasta que lo edites a mano
+  let slugTouched = false;
+  $('nN').addEventListener('input', () => { if (!slugTouched) $('nS').value = slugify($('nN').value); });
+  $('nS').addEventListener('input', () => { slugTouched = true; $('nS').value = $('nS').value.toLowerCase().replace(/[^a-z0-9-]/g, ''); });
+  $('nMk').addEventListener('change', () => { $('nS').disabled = !$('nMk').checked; $('nS').closest('.mkrow').style.opacity = $('nMk').checked ? 1 : .4; });
   $('newInf').onsubmit = async e => {
     e.preventDefault();
-    const r = await adminCall({ action:'panel_save_influencer', influencer:{ nombre:$('nN').value, codigo:$('nC').value, handle:$('nH').value, link:$('nL').value } }, 'Creador agregado');
-    if (r){ const n = A.data.influencers[A.data.influencers.length - 1]; A.open = n && n.id; viewAdmin(); }
+    const mk = $('nMk').checked, btn = $('nBtn');
+    btn.disabled = true; btn.textContent = mk ? 'Creando y publicando…' : 'Creando…';
+    const before = new Set(A.data.influencers.map(i => i.id));
+    const r = mk
+      ? await adminCall({ action:'panel_create_link', nombre:$('nN').value, codigo:$('nC').value, handle:$('nH').value, slug:$('nS').value }, 'Creador creado · publicando su link')
+      : await adminCall({ action:'panel_save_influencer', influencer:{ nombre:$('nN').value, codigo:$('nC').value, handle:$('nH').value, link:'' } }, 'Creador agregado');
+    if (r){ const n = A.data.influencers.find(i => !before.has(i.id)); A.open = n && n.id; if (r.url) startPending(r.url, $('nN').value); viewAdmin(); celebrate(); }
+    else { btn.disabled = false; btn.textContent = '+ Crear creador'; }
   };
   root.querySelectorAll('.pkgForm').forEach(f => f.onsubmit = async e => {
     e.preventDefault(); const v = Object.fromEntries(new FormData(f));
@@ -835,6 +888,16 @@ function bindAdmin(){
 async function adminClicks(e){
   const b = e.target.closest('button'); if (!b || !A.data) return;
   if (b.dataset.preview){ const inf = A.data.influencers.find(i => i.id === b.dataset.preview); if (inf){ root.removeEventListener('click', adminClicks); viewCreator(creatorView(inf), true); } return; }
+  if (b.dataset.mklink){
+    const inp = root.querySelector(`.mkslug[data-id="${CSS.escape(b.dataset.mklink)}"]`), slug = inp ? inp.value.trim().toLowerCase() : '';
+    const inf = A.data.influencers.find(i => i.id === b.dataset.mklink);
+    b.disabled = true; b.textContent = 'Publicando…';
+    const r = await adminCall({ action:'panel_create_link', influencerId:b.dataset.mklink, slug }, 'Publicando su link');
+    if (r){ startPending(r.url, inf ? inf.nombre : ''); viewAdmin(); } else { b.disabled = false; b.textContent = 'Crear su link'; }
+    return;
+  }
+  if (b.dataset.copyurl){ try { await navigator.clipboard.writeText(b.dataset.copyurl); toast('Link copiado'); } catch(_){ toast('No se pudo copiar', true); } return; }
+  if (b.hasAttribute('data-closepend')){ A.pending = null; document.getElementById('pendSlot').innerHTML = ''; return; }
   if (b.dataset.ask){ A.confirm = b.dataset.ask; viewAdmin(); return; }
   if (b.hasAttribute('data-cancel')){ A.confirm = null; viewAdmin(); return; }
   if (b.dataset.delRef){ A.confirm = null; if (await adminCall({ action:'panel_delete_ref', id:b.dataset.delRef }, 'Venta borrada')) viewAdmin(); return; }

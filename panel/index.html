@@ -209,6 +209,19 @@
   .legend i{width:12px;height:12px;border-radius:4px;background:var(--c)}
   .legend em{font-style:normal;color:var(--muted);font-variant-numeric:tabular-nums}
 
+  /* personas que llegaron por el link (solo conteos) */
+  .visits{display:grid;gap:22px;align-items:center}
+  @media (min-width:640px){.visits{grid-template-columns:auto 1fr}}
+  .vbig{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+  .vbig .v{font:900 54px/1 Montserrat,system-ui,sans-serif}
+  .vbig .lbl{color:var(--muted);font-size:14px}
+  .servs{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .sv{display:grid;grid-template-columns:1fr auto;gap:6px 10px;font-size:14.5px}
+  .sv .num{font-weight:700;font-variant-numeric:tabular-nums}
+  .sv .trk{grid-column:span 2;height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+  .sv .fl{display:block;height:100%;width:0;border-radius:99px;background:#05AAFF;transition:width 1.2s var(--ease);transition-delay:calc(var(--i)*140ms)}
+  .rv.in .sv .fl{width:var(--w)}
+
   /* link + QR */
   .share{display:grid;gap:18px;align-items:center}
   @media (min-width:640px){.share{grid-template-columns:auto 1fr}}
@@ -513,6 +526,9 @@ function viewCreator(c, preview){
   const progRows = Object.values(porProg).sort((a,b) => b.v - a.v);
   const first = String(c.nombre).replace(/^(dr|dra)\.?\s+/i, '').split(' ')[0];
   const last = refs[0], ms = monthly(refs, 6), thisMonth = ms[ms.length-1].v;
+  const vis = c.visitas || { total:0, mes:0, servicios:{} };
+  const servRows = Object.entries(vis.servicios || {}).map(([name,n]) => ({ name, n })).sort((a,b) => b.n - a.n);
+  const maxServ = Math.max(1, ...servRows.map(r => r.n));
 
   root.innerHTML = `<div class="view">
   <header class="bar"><div class="logo">${LOGO}</div><span class="tag">Portal de creador</span><span class="sp"></span>
@@ -526,7 +542,7 @@ function viewCreator(c, preview){
       <div class="money rv" style="--i:2">
         <span class="lbl">Comisión acumulada</span>
         <div class="odo num" id="odo" aria-hidden="true">$0</div><span class="sr">${money(total)}</span>
-        <div class="s">${refs.length === 1 ? '1 persona llegó por ti' : refs.length + ' personas llegaron por ti'} ${thisMonth ? `<span class="chip"><i></i>+${money(thisMonth)} este mes</span>` : ''}</div>
+        <div class="s">${vis.total === 1 ? '1 persona llegó por tu link' : vis.total + ' personas llegaron por tu link'} ${thisMonth ? `<span class="chip"><i></i>+${money(thisMonth)} este mes</span>` : ''}</div>
       </div>
     </div>
   </section>
@@ -535,10 +551,16 @@ function viewCreator(c, preview){
 
   <main class="p-body"><div class="wrap">
     <div class="stats">
-      <div class="glass stat rv" style="--i:0"><span class="ic">${ICON.users}</span><span class="lbl">Personas</span><span class="v num" data-count="${refs.length}">0</span></div>
+      <div class="glass stat rv" style="--i:0"><span class="ic">${ICON.users}</span><span class="lbl">Llegaron por tu link</span><span class="v num" data-count="${vis.total}">0</span></div>
       <div class="glass stat rv" style="--i:1"><span class="ic">${ICON.bag}</span><span class="lbl">Programas vendidos</span><span class="v num" data-count="${refs.filter(r => r.programa).length}">0</span></div>
       <div class="glass stat rv" style="--i:2"><span class="ic">${ICON.cal}</span><span class="lbl">Última venta</span><span class="v sm">${last ? fdate(last.fecha) : '—'}</span></div>
     </div>
+
+    <section class="glass panel rv" style="margin:12px 0"><h2>Personas que llegaron por tu link</h2><p class="hint">Cada persona que llenó el formulario desde tu link. Sus nombres aparecen abajo cuando eligen un programa y ganas comisión.</p>
+      ${vis.total ? `<div class="visits"><div class="vbig"><span class="v num" data-count="${vis.total}">0</span><span class="lbl">${vis.total === 1 ? 'persona' : 'personas'}</span>${vis.mes ? `<span class="chip"><i></i>+${vis.mes} este mes</span>` : ''}</div>
+        <div class="servs">${servRows.map((r,i) => `<div class="sv" style="--i:${i}"><span class="nm">${esc(r.name)}</span><span class="num">${r.n}</span><span class="trk"><span class="fl" style="--w:${r.n/maxServ*100}%"></span></span></div>`).join('')}</div></div>`
+      : `<p class="empty">${c.link ? 'Todavía nadie ha llenado el formulario desde tu link. Compártelo y aquí verás cuántas personas llegan.' : 'Cuando la clínica te cree tu link personal, aquí verás cuántas personas llegan por él.'}</p>`}
+    </section>
 
     <div class="cols">
       <section class="glass panel rv" id="pChart"><h2>Tu comisión por mes</h2><p class="hint">Últimos 6 meses</p>${chartHTML(ms)}</section>
@@ -551,7 +573,7 @@ function viewCreator(c, preview){
         <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="linkrow"><code>${esc(c.link)}</code></div>
           <div class="linkrow"><button class="btn blue" id="copy" type="button">Copiar link</button>${navigator.share ? '<button class="btn" id="share" type="button">Compartir</button>' : ''}<button class="btn" id="dlqr" type="button">Descargar QR</button></div></div></div></section>` : ''}
 
-    <section class="glass panel rv" style="margin-top:12px"><h2>Personas que llegaron por ti</h2><p class="hint">${refs.length ? 'De la más reciente a la primera' : ''}</p>
+    <section class="glass panel rv" style="margin-top:12px"><h2>Tus comisiones</h2><p class="hint">${refs.length ? 'Personas que eligieron un programa · de la más reciente a la primera' : ''}</p>
       ${refs.length ? `<div class="tlwrap" id="tl"><svg class="sp" aria-hidden="true"><line x1="11" y1="0" x2="11" y2="100%"/><line class="fillp" id="tlFill" x1="11" y1="0" x2="11" y2="0"/></svg>
         ${refs.map((r,i) => `<div class="glass tl rv" style="--i:${Math.min(i,5)}">
           <span class="ini">${esc(initials(r.nombre))}</span>
@@ -678,7 +700,7 @@ function creatorView(inf){
   const d = A.data, pk = Object.fromEntries(d.paquetes.map(p => [p.id, p]));
   const refs = d.referidos.filter(r => r.influencerId === inf.id).map(r => ({ nombre:r.nombre, fecha:r.fecha, programa: pk[r.paqueteId] ? pk[r.paqueteId].nombre : '', comision:r.comision }))
     .sort((a,b) => a.fecha < b.fecha ? 1 : -1);
-  return { nombre:inf.nombre, handle:inf.handle, link:inf.link, referidos:refs, total: refs.reduce((s,r) => s + Number(r.comision||0), 0) };
+  return { nombre:inf.nombre, handle:inf.handle, link:inf.link, referidos:refs, visitas:(d.visitas || {})[inf.id], total: refs.reduce((s,r) => s + Number(r.comision||0), 0) };
 }
 
 function viewAdmin(){
